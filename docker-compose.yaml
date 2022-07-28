@@ -1,0 +1,63 @@
+version: "3.1"
+
+services:
+  db:
+    image: postgres
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: root
+
+  back:
+    build: back
+    init: true
+    environment:
+      CARGO_TARGET_DIR: /opt/target
+      PORT: 3001
+    volumes:
+      - ./back:/opt/back
+      - ./scripts:/opt/scripts:ro
+      - rust-cargo-home-back:/usr/local/cargo
+      - rust-target-dir-back:/opt/target
+    working_dir: /opt/back
+    entrypoint: ./entrypoint.sh
+    command: cargo watch -x 'run'
+    ports:
+      - 3001:3001
+    depends_on:
+      - db
+
+  front:
+    build: front
+    init: true
+    environment:
+      CARGO_TARGET_DIR: /opt/target
+    volumes:
+      - ./front:/opt/front
+      - ./scripts:/opt/scripts:ro
+      - rust-cargo-home-front:/usr/local/cargo
+      - rust-target-dir-front:/opt/target
+    working_dir: /opt/front
+    entrypoint: ./entrypoint.sh
+    command: trunk serve --port 80 --address 0.0.0.0
+    depends_on:
+      - "back"
+
+  nginx:
+    build: nginx-dev
+    init: true
+    stop_signal: SIGINT
+    volumes:
+      - ./scripts:/opt/scripts:ro
+    depends_on:
+      - front
+      - back
+    ports:
+      - 8080:8080
+
+volumes:
+  rust-cargo-home-back:
+  rust-target-dir-back:
+  rust-cargo-home-front:
+  rust-target-dir-front:
