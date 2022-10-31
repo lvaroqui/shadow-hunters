@@ -2,14 +2,20 @@ use anyhow::Result;
 use state::State;
 use tokio::sync::{mpsc, oneshot};
 
+mod dice;
 mod state;
 
-#[derive(Debug, Clone, Copy)]
+use dice::Dice;
+
+use crate::state::Mutation;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayerId(usize);
 
 pub struct ShadowHunter {
     request_channel: mpsc::Sender<Command>,
     state: State,
+    dice: Dice,
 }
 
 #[derive(Debug)]
@@ -22,11 +28,70 @@ pub enum Command {
 }
 
 impl ShadowHunter {
-    pub fn new(player_count: usize, request_channel: mpsc::Sender<Command>) -> Self {
+    pub fn new(player_count: usize, command_channel: mpsc::Sender<Command>) -> Self {
+        let mut dice = Dice::new();
         ShadowHunter {
-            request_channel,
-            state: State::new(player_count),
+            request_channel: command_channel,
+            state: State::new(player_count, &mut dice),
+            dice,
         }
+    }
+
+    pub async fn run(&mut self) -> Result<()> {
+        println!("{:#?}", self.state);
+        loop {
+            // Movements
+            self.request_action(self.state.current_player().id(), &[("Roll the dice", ())])
+                .await?;
+            let current_player_location = self.state.current_player().location();
+            let roll = loop {
+                let roll = self.dice.roll();
+                if !current_player_location.dice_numbers().contains(&roll.sum()) {
+                    break roll;
+                }
+            };
+            // TODO: notify front end
+            println!("{:?}, sum: {}", roll, roll.sum());
+
+            let location = if roll.sum() == 7 {
+                let choices = self
+                    .state
+                    .locations()
+                    .iter()
+                    .filter(|l| l.id() != current_player_location.id())
+                    .map(|l| (format!("{:?}", l), l))
+                    .collect::<Vec<_>>();
+                self.request_action(self.state.current_player().id(), &choices)
+                    .await?
+            } else {
+                self.state.locations().location_from_dice_number(roll.sum())
+            };
+            self.mutate_state(Mutation::Move(
+                self.state.current_player().id(),
+                location.id(),
+            ))
+            .await;
+
+            // Attack
+            // TODO
+
+            // Advance current player
+            let p = self
+                .state
+                .players()
+                .iter()
+                .cycle() // Make the iterator cycle so we can loop back from last player to first
+                .skip_while(|p| p.id() != self.state.current_player().id()) // Find current player
+                .skip(1) // Skip him
+                .take(self.state.players().len() - 1) // Avoid looping back to current player
+                .find(|p| p.is_alive())
+                .expect("If there are no other players, the game should be over");
+
+            self.mutate_state(Mutation::ChangeCurrentPlayer(p.id()))
+                .await;
+        }
+
+        Ok(())
     }
 
     async fn request_action<T>(
@@ -49,19 +114,8 @@ impl ShadowHunter {
         Ok(choices[r].1)
     }
 
-    pub async fn run(&mut self) -> Result<()> {
-        self.request_action(PlayerId(0), &[("Throw the dice", ())])
-            .await?;
-        println!("Dice launched!!!");
-
-        let selected = self
-            .request_action(
-                PlayerId(0),
-                &[("Kill Luc", PlayerId(1)), ("Kill Marie", PlayerId(2))],
-            )
-            .await?;
-        println!("Selected: {:?}", selected);
-
-        Ok(())
+    async fn mutate_state(&mut self, mutation: Mutation) {
+        // TODO: send mutation to front end
+        self.state.mutate(mutation)
     }
 }
