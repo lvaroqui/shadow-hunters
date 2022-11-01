@@ -39,7 +39,7 @@ impl Player {
     }
 
     pub fn location(&self) -> &'static dyn Location {
-        Locations::location(self.location)
+        Locations::from_id(self.location)
     }
 
     pub fn is_alive(&self) -> bool {
@@ -67,14 +67,13 @@ impl State {
                 .map(|id| Player {
                     id: PlayerId(id),
                     damage: 0,
-                    location: locations
-                        .location_from_dice_number(loop {
-                            let s = dice.roll().sum();
-                            if s != 7 {
-                                break s;
-                            }
-                        })
-                        .id(),
+                    location: Locations::from_dice_number(loop {
+                        let s = dice.roll().sum();
+                        if s != 7 {
+                            break s;
+                        }
+                    })
+                    .id(),
                     character: None,
                 })
                 .collect(),

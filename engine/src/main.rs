@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
                     println!(
                         "{:?} moved to {}",
                         player_id,
-                        Locations::location(location_id)
+                        Locations::from_id(location_id)
                     );
                 }
                 engine::Mutation::ChangeCurrentPlayer(player_id) => {

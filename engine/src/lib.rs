@@ -82,7 +82,7 @@ impl ShadowHunter {
                 self.request_action(self.state.current_player().id(), &choices)
                     .await?
             } else {
-                self.state.locations().location_from_dice_number(roll.sum())
+                Locations::from_dice_number(roll.sum())
             };
             self.mutate_state(Mutation::Move(
                 self.state.current_player().id(),

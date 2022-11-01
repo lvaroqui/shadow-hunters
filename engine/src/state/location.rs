@@ -26,7 +26,7 @@ impl Locations {
         Self { locations }
     }
 
-    pub fn location_from_dice_number(&self, dice_number: usize) -> &'static dyn Location {
+    pub fn from_dice_number(dice_number: usize) -> &'static dyn Location {
         for l in LOCATIONS {
             if l.dice_numbers().contains(&dice_number) {
                 return l;
@@ -35,7 +35,7 @@ impl Locations {
         panic!("Provided number ({dice_number}) does not correspond to a location.");
     }
 
-    pub fn location(id: LocationId) -> &'static dyn Location {
+    pub fn from_id(id: LocationId) -> &'static dyn Location {
         LOCATIONS[id.0]
     }
 
