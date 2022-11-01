@@ -39,10 +39,12 @@ pub enum Message {
 pub enum Action {
     Basic(String),
     Location(LocationId),
+    Player(PlayerId),
 }
 
 #[derive(Debug)]
 pub enum InfoMessage {
+    Basic(String),
     Roll { from: PlayerId, roll: Roll },
 }
 
@@ -102,7 +104,70 @@ impl ShadowHunter {
             .await?;
 
             // Attack
-            // TODO
+            let attackable_locations = self
+                .state
+                .locations()
+                .in_group_iter(self.state.current_player().location().id())
+                .map(|l| l.id())
+                .collect::<Vec<_>>();
+            let attackable_players = self
+                .state
+                .players()
+                .iter()
+                .filter(|p| attackable_locations.contains(&p.location().id()))
+                .filter(|p| p.id() != self.state.current_player().id())
+                .map(|p| (Action::Player(p.id()), Some(p.id())))
+                .chain(std::iter::once((
+                    Action::Basic("Skip attack".to_owned()),
+                    None,
+                )));
+            if let Some(player_id) = self
+                .message_channel
+                .request_action(self.state.current_player().id(), attackable_players)
+                .await?
+            {
+                self.message_channel
+                    .send(Message::Info {
+                        destination: self.state.players().iter().map(|p| p.id()).collect(),
+                        payload: InfoMessage::Basic(format!(
+                            "{:?} is preparing an attack on {:?}",
+                            self.state.current_player().id(),
+                            player_id
+                        )),
+                    })
+                    .await?;
+
+                self.message_channel
+                    .request_action(
+                        self.state.current_player().id(),
+                        [(Action::Basic("Roll the dice".to_owned()), ())],
+                    )
+                    .await?;
+
+                let roll = self.dice.roll();
+                self.message_channel
+                    .send(Message::Info {
+                        destination: self.state.players().iter().map(|p| p.id()).collect(),
+                        payload: InfoMessage::Roll {
+                            from: self.state.current_player().id(),
+                            roll,
+                        },
+                    })
+                    .await?;
+                let damage = roll.diff();
+                self.mutate_state(Mutation::DamagePlayer(player_id, damage))
+                    .await?;
+            } else {
+                self.message_channel
+                    .send(Message::Info {
+                        destination: self.state.players().iter().map(|p| p.id()).collect(),
+                        payload: InfoMessage::Basic(format!(
+                            "{:?} did not attack",
+                            self.state.current_player()
+                        )),
+                    })
+                    .await?;
+            }
 
             // Advance current player
             let p = self

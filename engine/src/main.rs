@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use anyhow::Result;
 use engine::{Locations, Message, ShadowHunter};
 use tokio::{io::AsyncBufReadExt, sync::mpsc};
@@ -31,7 +29,12 @@ async fn main() -> Result<()> {
                         print!("  {}: ", i,);
                         match c {
                             engine::Action::Basic(s) => println!("{}", s),
-                            engine::Action::Location(l) => println!("{}", Locations::from_id(*l)),
+                            engine::Action::Location(l) => {
+                                println!("{}", Locations::from_id(*l))
+                            }
+                            engine::Action::Player(p) => {
+                                println!("{:?}", p)
+                            }
                         }
                     }
                     let input = read_line().await?;
@@ -62,6 +65,9 @@ async fn main() -> Result<()> {
                 engine::Mutation::ChangeCurrentPlayer(player_id) => {
                     println!();
                     println!("Current player is now: {:?}", player_id);
+                }
+                engine::Mutation::DamagePlayer(player_id, damage) => {
+                    println!("{:?} took {} damage", player_id, damage);
                 }
             },
         }

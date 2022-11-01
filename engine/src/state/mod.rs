@@ -100,6 +100,7 @@ impl State {
                 self.players[player_id].location = location_id;
             }
             Mutation::ChangeCurrentPlayer(player_id) => self.current_player = player_id,
+            Mutation::DamagePlayer(player_id, damage) => self.players[player_id].damage += damage,
         }
     }
 }
@@ -108,4 +109,5 @@ impl State {
 pub enum Mutation {
     Move(PlayerId, LocationId),
     ChangeCurrentPlayer(PlayerId),
+    DamagePlayer(PlayerId, usize),
 }
