@@ -20,6 +20,13 @@ static LOCATIONS: [&'static dyn Location; 6] = [
 ];
 
 impl Locations {
+    #[cfg(test)]
+    pub fn unshuffled() -> Self {
+        Self {
+            locations: LOCATIONS,
+        }
+    }
+
     pub fn generate() -> Self {
         let mut locations = LOCATIONS;
         locations.shuffle(&mut StdRng::from_entropy());
@@ -39,8 +46,45 @@ impl Locations {
         LOCATIONS[id.0]
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &'static dyn Location> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = &'static dyn Location> + Clone + '_ {
         self.locations.iter().copied()
+    }
+
+    pub fn in_group_iter(
+        &self,
+        id: LocationId,
+    ) -> impl Iterator<Item = &'static dyn Location> + Clone + '_ {
+        self.group_iter()
+            .filter(move |g| g.iter().any(|l| l.id() == id))
+            .flatten()
+            .copied()
+    }
+
+    pub fn out_group_iter(
+        &self,
+        id: LocationId,
+    ) -> impl Iterator<Item = &'static dyn Location> + Clone + '_ {
+        self.group_iter()
+            .filter(move |g| !g.iter().any(|l| l.id() == id))
+            .flatten()
+            .copied()
+    }
+
+    pub fn adjacent(&self, id: LocationId) -> [&'static dyn Location; 2] {
+        let pos = self
+            .locations
+            .iter()
+            .position(|l| l.id() == id)
+            .expect("Invalid id") as isize;
+        let len = self.locations.len() as isize;
+        [
+            self.locations[((pos - 1).rem_euclid(len)) as usize],
+            self.locations[((pos + 1).rem_euclid(len)) as usize],
+        ]
+    }
+
+    fn group_iter(&self) -> impl Iterator<Item = &[&'static dyn Location]> + Clone + '_ {
+        self.locations.chunks(2)
     }
 }
 
@@ -172,5 +216,72 @@ mod tests {
         for (i, l) in LOCATIONS.iter().enumerate() {
             assert_eq!(l.id().0, i);
         }
+    }
+
+    #[test]
+    fn in_group_iter() {
+        let locations = Locations::unshuffled();
+        assert!(locations.in_group_iter(LocationId(0)).map(|l| l.id()).eq([
+            LocationId(0),
+            LocationId(1)
+        ]
+        .into_iter()));
+        assert!(locations.in_group_iter(LocationId(1)).map(|l| l.id()).eq([
+            LocationId(0),
+            LocationId(1)
+        ]
+        .into_iter()));
+        assert!(locations.in_group_iter(LocationId(3)).map(|l| l.id()).eq([
+            LocationId(2),
+            LocationId(3)
+        ]
+        .into_iter()));
+    }
+
+    #[test]
+    fn out_group_iter() {
+        let locations = Locations::unshuffled();
+        assert!(locations.out_group_iter(LocationId(0)).map(|l| l.id()).eq([
+            LocationId(2),
+            LocationId(3),
+            LocationId(4),
+            LocationId(5)
+        ]
+        .into_iter()));
+        assert!(locations.out_group_iter(LocationId(1)).map(|l| l.id()).eq([
+            LocationId(2),
+            LocationId(3),
+            LocationId(4),
+            LocationId(5)
+        ]
+        .into_iter()));
+        assert!(locations.out_group_iter(LocationId(3)).map(|l| l.id()).eq([
+            LocationId(0),
+            LocationId(1),
+            LocationId(4),
+            LocationId(5)
+        ]
+        .into_iter()));
+    }
+
+    #[test]
+    fn adjacent() {
+        let locations = Locations::unshuffled();
+        assert_eq!(
+            locations.adjacent(LocationId(0)).map(|l| l.id()),
+            [LocationId(5), LocationId(1)]
+        );
+        assert_eq!(
+            locations.adjacent(LocationId(1)).map(|l| l.id()),
+            [LocationId(0), LocationId(2)]
+        );
+        assert_eq!(
+            locations.adjacent(LocationId(4)).map(|l| l.id()),
+            [LocationId(3), LocationId(5)]
+        );
+        assert_eq!(
+            locations.adjacent(LocationId(5)).map(|l| l.id()),
+            [LocationId(4), LocationId(0)]
+        );
     }
 }
