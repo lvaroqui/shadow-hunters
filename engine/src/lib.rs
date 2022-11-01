@@ -60,20 +60,54 @@ impl ShadowHunter {
 
     pub async fn run(&mut self) -> Result<()> {
         loop {
-            // Movements
+            self.movement().await?;
+            self.attack().await?;
+            self.next_player().await?;
+        }
+    }
+
+    async fn attack(&mut self) -> Result<(), anyhow::Error> {
+        let attackable_locations = self
+            .state
+            .locations()
+            .in_group_iter(self.state.current_player().location().id())
+            .map(|l| l.id())
+            .collect::<Vec<_>>();
+        let attackable_players = self
+            .state
+            .players()
+            .iter()
+            .filter(|p| attackable_locations.contains(&p.location().id()))
+            .filter(|p| p.id() != self.state.current_player().id())
+            .map(|p| (Action::Player(p.id()), Some(p.id())))
+            .chain(std::iter::once((
+                Action::Basic("Skip attack".to_owned()),
+                None,
+            )));
+        if let Some(player_id) = self
+            .message_channel
+            .request_action(self.state.current_player().id(), attackable_players)
+            .await?
+        {
+            self.message_channel
+                .send(Message::Info {
+                    destination: self.state.players().iter().map(|p| p.id()).collect(),
+                    payload: InfoMessage::Basic(format!(
+                        "{:?} is preparing an attack on {:?}",
+                        self.state.current_player().id(),
+                        player_id
+                    )),
+                })
+                .await?;
+
             self.message_channel
                 .request_action(
                     self.state.current_player().id(),
                     [(Action::Basic("Roll the dice".to_owned()), ())],
                 )
                 .await?;
-            let current_player_location = self.state.current_player().location();
-            let roll = loop {
-                let roll = self.dice.roll();
-                if !current_player_location.dice_numbers().contains(&roll.sum()) {
-                    break roll;
-                }
-            };
+
+            let roll = self.dice.roll();
             self.message_channel
                 .send(Message::Info {
                     destination: self.state.players().iter().map(|p| p.id()).collect(),
@@ -83,107 +117,81 @@ impl ShadowHunter {
                     },
                 })
                 .await?;
-
-            let location = if roll.sum() == 7 {
-                let choices = self
-                    .state
-                    .locations()
-                    .iter()
-                    .filter(|l| l.id() != current_player_location.id())
-                    .map(|l| (Action::Location(l.id()), l));
-                self.message_channel
-                    .request_action(self.state.current_player().id(), choices)
-                    .await?
-            } else {
-                Locations::from_dice_number(roll.sum())
-            };
-            self.mutate_state(Mutation::Move(
-                self.state.current_player().id(),
-                location.id(),
-            ))
-            .await?;
-
-            // Attack
-            let attackable_locations = self
-                .state
-                .locations()
-                .in_group_iter(self.state.current_player().location().id())
-                .map(|l| l.id())
-                .collect::<Vec<_>>();
-            let attackable_players = self
-                .state
-                .players()
-                .iter()
-                .filter(|p| attackable_locations.contains(&p.location().id()))
-                .filter(|p| p.id() != self.state.current_player().id())
-                .map(|p| (Action::Player(p.id()), Some(p.id())))
-                .chain(std::iter::once((
-                    Action::Basic("Skip attack".to_owned()),
-                    None,
-                )));
-            if let Some(player_id) = self
-                .message_channel
-                .request_action(self.state.current_player().id(), attackable_players)
-                .await?
-            {
-                self.message_channel
-                    .send(Message::Info {
-                        destination: self.state.players().iter().map(|p| p.id()).collect(),
-                        payload: InfoMessage::Basic(format!(
-                            "{:?} is preparing an attack on {:?}",
-                            self.state.current_player().id(),
-                            player_id
-                        )),
-                    })
-                    .await?;
-
-                self.message_channel
-                    .request_action(
-                        self.state.current_player().id(),
-                        [(Action::Basic("Roll the dice".to_owned()), ())],
-                    )
-                    .await?;
-
-                let roll = self.dice.roll();
-                self.message_channel
-                    .send(Message::Info {
-                        destination: self.state.players().iter().map(|p| p.id()).collect(),
-                        payload: InfoMessage::Roll {
-                            from: self.state.current_player().id(),
-                            roll,
-                        },
-                    })
-                    .await?;
-                let damage = roll.diff();
-                self.mutate_state(Mutation::DamagePlayer(player_id, damage))
-                    .await?;
-            } else {
-                self.message_channel
-                    .send(Message::Info {
-                        destination: self.state.players().iter().map(|p| p.id()).collect(),
-                        payload: InfoMessage::Basic(format!(
-                            "{:?} did not attack",
-                            self.state.current_player()
-                        )),
-                    })
-                    .await?;
-            }
-
-            // Advance current player
-            let p = self
-                .state
-                .players()
-                .iter()
-                .cycle() // Make the iterator cycle so we can loop back from last player to first
-                .skip_while(|p| p.id() != self.state.current_player().id()) // Find current player
-                .skip(1) // Skip him
-                .take(self.state.players().len() - 1) // Avoid looping back to current player
-                .find(|p| p.is_alive())
-                .expect("If there are no other players, the game should be over");
-
-            self.mutate_state(Mutation::ChangeCurrentPlayer(p.id()))
+            let damage = roll.diff();
+            self.mutate_state(Mutation::DamagePlayer(player_id, damage))
+                .await?;
+        } else {
+            self.message_channel
+                .send(Message::Info {
+                    destination: self.state.players().iter().map(|p| p.id()).collect(),
+                    payload: InfoMessage::Basic(format!(
+                        "{:?} did not attack",
+                        self.state.current_player()
+                    )),
+                })
                 .await?;
         }
+        Ok(())
+    }
+
+    async fn movement(&mut self) -> Result<(), anyhow::Error> {
+        self.message_channel
+            .request_action(
+                self.state.current_player().id(),
+                [(Action::Basic("Roll the dice".to_owned()), ())],
+            )
+            .await?;
+        let current_player_location = self.state.current_player().location();
+        let roll = loop {
+            let roll = self.dice.roll();
+            if !current_player_location.dice_numbers().contains(&roll.sum()) {
+                break roll;
+            }
+        };
+        self.message_channel
+            .send(Message::Info {
+                destination: self.state.players().iter().map(|p| p.id()).collect(),
+                payload: InfoMessage::Roll {
+                    from: self.state.current_player().id(),
+                    roll,
+                },
+            })
+            .await?;
+        let location = if roll.sum() == 7 {
+            let choices = self
+                .state
+                .locations()
+                .iter()
+                .filter(|l| l.id() != current_player_location.id())
+                .map(|l| (Action::Location(l.id()), l));
+            self.message_channel
+                .request_action(self.state.current_player().id(), choices)
+                .await?
+        } else {
+            Locations::from_dice_number(roll.sum())
+        };
+        self.mutate_state(Mutation::Move(
+            self.state.current_player().id(),
+            location.id(),
+        ))
+        .await?;
+        Ok(())
+    }
+
+    async fn next_player(&mut self) -> Result<(), anyhow::Error> {
+        let p = self
+            .state
+            .players()
+            .iter()
+            .cycle() // Make the iterator cycle so we can loop back from last player to first
+            .skip_while(|p| p.id() != self.state.current_player().id()) // Find current player
+            .skip(1) // Skip him
+            .take(self.state.players().len() - 1) // Avoid looping back to current player
+            .find(|p| p.is_alive())
+            .expect("If there are no other players, the game should be over");
+        self.mutate_state(Mutation::ChangeCurrentPlayer(p.id()))
+            .await?;
+        Ok(())
     }
 
     async fn mutate_state(&mut self, mutation: Mutation) -> Result<()> {
@@ -191,6 +199,7 @@ impl ShadowHunter {
         self.message_channel
             .send(Message::StateMutation(mutation))
             .await?;
+        // TODO: check victory condition
         Ok(())
     }
 }
