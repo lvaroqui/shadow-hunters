@@ -9,7 +9,7 @@ use crate::dice::Dice;
 use crate::PlayerId;
 
 use self::character::Character;
-use self::location::{Location, LocationId, Locations};
+pub use self::location::{Location, LocationId, Locations};
 
 impl Index<PlayerId> for Vec<Player> {
     type Output = Player;
@@ -31,7 +31,6 @@ pub struct Player {
     damage: usize,
     location: LocationId,
     character: Option<&'static dyn Character>,
-    locations: Arc<Locations>,
 }
 
 impl Player {
@@ -40,7 +39,7 @@ impl Player {
     }
 
     pub fn location(&self) -> &'static dyn Location {
-        self.locations.location(self.location)
+        Locations::location(self.location)
     }
 
     pub fn is_alive(&self) -> bool {
@@ -61,7 +60,7 @@ pub struct State {
 
 impl State {
     pub fn new(player_count: usize, dice: &mut Dice) -> State {
-        let locations = Arc::new(Locations::new());
+        let locations = Arc::new(Locations::generate());
         State {
             players: (0..player_count)
                 .into_iter()
@@ -77,7 +76,6 @@ impl State {
                         })
                         .id(),
                     character: None,
-                    locations: Arc::clone(&locations),
                 })
                 .collect(),
             current_player: PlayerId(0),
@@ -107,6 +105,7 @@ impl State {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum Mutation {
     Move(PlayerId, LocationId),
     ChangeCurrentPlayer(PlayerId),

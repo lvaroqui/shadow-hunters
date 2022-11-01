@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,7 +20,7 @@ static LOCATIONS: [&'static dyn Location; 6] = [
 ];
 
 impl Locations {
-    pub fn new() -> Self {
+    pub fn generate() -> Self {
         let mut locations = LOCATIONS;
         locations.shuffle(&mut StdRng::from_entropy());
         Self { locations }
@@ -33,7 +35,7 @@ impl Locations {
         panic!("Provided number ({dice_number}) does not correspond to a location.");
     }
 
-    pub fn location(&self, id: LocationId) -> &'static dyn Location {
+    pub fn location(id: LocationId) -> &'static dyn Location {
         LOCATIONS[id.0]
     }
 
@@ -42,7 +44,7 @@ impl Locations {
     }
 }
 
-pub trait Location: core::fmt::Debug + Send + Sync {
+pub trait Location: core::fmt::Debug + Send + Sync + Display {
     fn id(&self) -> LocationId;
     fn dice_numbers(&self) -> &'static [usize];
 }
@@ -60,6 +62,11 @@ impl Location for HermitsCabin {
         &[2, 3]
     }
 }
+impl Display for HermitsCabin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Hermits Cabin")
+    }
+}
 
 #[derive(Debug)]
 struct UnderworldGate {
@@ -72,6 +79,11 @@ impl Location for UnderworldGate {
 
     fn dice_numbers(&self) -> &'static [usize] {
         &[4, 5]
+    }
+}
+impl Display for UnderworldGate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Underworld Gate")
     }
 }
 
@@ -88,6 +100,11 @@ impl Location for Church {
         &[6]
     }
 }
+impl Display for Church {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Church")
+    }
+}
 
 #[derive(Debug)]
 struct Cemetry {
@@ -100,6 +117,11 @@ impl Location for Cemetry {
 
     fn dice_numbers(&self) -> &'static [usize] {
         &[8]
+    }
+}
+impl Display for Cemetry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Cemetry")
     }
 }
 
@@ -116,6 +138,11 @@ impl Location for WeirdWoods {
         &[9]
     }
 }
+impl Display for WeirdWoods {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Weird Woods")
+    }
+}
 
 #[derive(Debug)]
 struct ErstwhileAltar {
@@ -128,6 +155,11 @@ impl Location for ErstwhileAltar {
 
     fn dice_numbers(&self) -> &'static [usize] {
         &[10]
+    }
+}
+impl Display for ErstwhileAltar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Ertswhile Altar")
     }
 }
 

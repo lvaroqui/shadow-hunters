@@ -5,33 +5,44 @@ use tokio::sync::{mpsc, oneshot};
 mod dice;
 mod state;
 
+pub use crate::state::Mutation;
+pub use crate::state::{Location, LocationId, Locations};
 use dice::Dice;
-
-use crate::state::Mutation;
+pub use dice::Roll;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayerId(usize);
 
 pub struct ShadowHunter {
-    request_channel: mpsc::Sender<Command>,
+    message_channel: mpsc::Sender<Message>,
     state: State,
     dice: Dice,
 }
 
 #[derive(Debug)]
-pub enum Command {
+pub enum InfoMessage {
+    Roll { from: PlayerId, roll: Roll },
+}
+
+#[derive(Debug)]
+pub enum Message {
     ActionRequest {
         player: PlayerId,
         choices: Vec<String>,
         response: oneshot::Sender<usize>,
     },
+    Info {
+        destination: Vec<PlayerId>,
+        payload: InfoMessage,
+    },
+    StateMutation(Mutation),
 }
 
 impl ShadowHunter {
-    pub fn new(player_count: usize, command_channel: mpsc::Sender<Command>) -> Self {
+    pub fn new(player_count: usize, command_channel: mpsc::Sender<Message>) -> Self {
         let mut dice = Dice::new();
         ShadowHunter {
-            request_channel: command_channel,
+            message_channel: command_channel,
             state: State::new(player_count, &mut dice),
             dice,
         }
@@ -50,8 +61,15 @@ impl ShadowHunter {
                     break roll;
                 }
             };
-            // TODO: notify front end
-            println!("{:?}, sum: {}", roll, roll.sum());
+            self.message_channel
+                .send(Message::Info {
+                    destination: self.state.players().iter().map(|p| p.id()).collect(),
+                    payload: InfoMessage::Roll {
+                        from: self.state.current_player().id(),
+                        roll,
+                    },
+                })
+                .await?;
 
             let location = if roll.sum() == 7 {
                 let choices = self
@@ -70,7 +88,7 @@ impl ShadowHunter {
                 self.state.current_player().id(),
                 location.id(),
             ))
-            .await;
+            .await?;
 
             // Attack
             // TODO
@@ -88,10 +106,8 @@ impl ShadowHunter {
                 .expect("If there are no other players, the game should be over");
 
             self.mutate_state(Mutation::ChangeCurrentPlayer(p.id()))
-                .await;
+                .await?;
         }
-
-        Ok(())
     }
 
     async fn request_action<T>(
@@ -103,8 +119,8 @@ impl ShadowHunter {
         T: Copy + Send,
     {
         let (snd, rcv) = oneshot::channel();
-        self.request_channel
-            .send(Command::ActionRequest {
+        self.message_channel
+            .send(Message::ActionRequest {
                 player: from_player,
                 choices: choices.iter().map(|(s, _)| s.to_string()).collect(),
                 response: snd,
@@ -114,8 +130,11 @@ impl ShadowHunter {
         Ok(choices[r].1)
     }
 
-    async fn mutate_state(&mut self, mutation: Mutation) {
-        // TODO: send mutation to front end
-        self.state.mutate(mutation)
+    async fn mutate_state(&mut self, mutation: Mutation) -> Result<()> {
+        self.state.mutate(mutation);
+        self.message_channel
+            .send(Message::StateMutation(mutation))
+            .await?;
+        Ok(())
     }
 }

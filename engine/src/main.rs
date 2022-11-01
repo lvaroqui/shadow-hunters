@@ -1,5 +1,5 @@
 use anyhow::Result;
-use engine::{Command, ShadowHunter};
+use engine::{Locations, Message, ShadowHunter};
 use tokio::{io::AsyncBufReadExt, sync::mpsc};
 
 async fn read_line() -> Result<String> {
@@ -18,13 +18,16 @@ async fn main() -> Result<()> {
 
     while let Some(cmd) = receiver.recv().await {
         match cmd {
-            Command::ActionRequest {
+            Message::ActionRequest {
                 player,
                 choices,
                 response,
             } => {
                 let choice = loop {
-                    println!("{:?} {:?}", player, choices);
+                    println!("Action request for player {:?}:", player);
+                    for (i, c) in choices.iter().enumerate() {
+                        println!("  {}: {}", i, c);
+                    }
                     let input = read_line().await?;
                     if let Ok(choice) = input.parse() {
                         if choice < choices.len() {
@@ -34,6 +37,26 @@ async fn main() -> Result<()> {
                 };
                 response.send(choice).unwrap();
             }
+            Message::Info {
+                destination,
+                payload,
+            } => {
+                println!("Received info for players: {:?}", destination);
+                println!("  {:?}", payload);
+            }
+            Message::StateMutation(mutation) => match mutation {
+                engine::Mutation::Move(player_id, location_id) => {
+                    println!(
+                        "{:?} moved to {}",
+                        player_id,
+                        Locations::location(location_id)
+                    );
+                }
+                engine::Mutation::ChangeCurrentPlayer(player_id) => {
+                    println!();
+                    println!("Current player is now: {:?}", player_id);
+                }
+            },
         }
     }
 
