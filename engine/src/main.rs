@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use anyhow::Result;
 use engine::{Locations, Message, ShadowHunter};
 use tokio::{io::AsyncBufReadExt, sync::mpsc};
@@ -26,13 +28,18 @@ async fn main() -> Result<()> {
                 let choice = loop {
                     println!("Action request for player {:?}:", player);
                     for (i, c) in choices.iter().enumerate() {
-                        println!("  {}: {}", i, c);
+                        print!("  {}: ", i,);
+                        match c {
+                            engine::Action::Basic(s) => println!("{}", s),
+                            engine::Action::Location(l) => println!("{}", Locations::from_id(*l)),
+                        }
                     }
                     let input = read_line().await?;
                     if let Ok(choice) = input.parse() {
                         if choice < choices.len() {
                             break choice;
                         }
+                        println!("Invalid input");
                     }
                 };
                 response.send(choice).unwrap();
