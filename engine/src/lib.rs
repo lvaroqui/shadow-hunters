@@ -15,7 +15,7 @@ pub struct PlayerId(usize);
 
 pub struct MessageChannel(mpsc::Sender<Message>);
 
-pub struct ShadowHunter {
+pub struct GameLogic {
     message_channel: MessageChannel,
     state: State,
     dice: Dice,
@@ -48,10 +48,10 @@ pub enum InfoMessage {
     Roll { from: PlayerId, roll: Roll },
 }
 
-impl ShadowHunter {
+impl GameLogic {
     pub fn new(player_count: usize, command_channel: mpsc::Sender<Message>) -> Self {
         let mut dice = Dice::new();
-        ShadowHunter {
+        GameLogic {
             message_channel: MessageChannel(command_channel),
             state: State::new(player_count, &mut dice),
             dice,

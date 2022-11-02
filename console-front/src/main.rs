@@ -1,5 +1,5 @@
 use anyhow::Result;
-use engine::{Locations, Message, ShadowHunter};
+use engine::{GameLogic, Locations, Message};
 use tokio::{io::AsyncBufReadExt, sync::mpsc};
 
 async fn read_line() -> Result<String> {
@@ -12,7 +12,7 @@ async fn read_line() -> Result<String> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let (sender, mut receiver) = mpsc::channel(1);
-    let mut sh = ShadowHunter::new(5, sender);
+    let mut sh = GameLogic::new(5, sender);
 
     tokio::spawn(async move { sh.run().await });
 
