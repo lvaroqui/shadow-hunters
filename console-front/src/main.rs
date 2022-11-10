@@ -28,13 +28,20 @@ async fn main() -> Result<()> {
                     for (i, c) in choices.iter().enumerate() {
                         print!("  {}: ", i,);
                         match c {
-                            engine::Action::Basic(s) => println!("{}", s),
                             engine::Action::Location(l) => {
                                 println!("{}", Locations::from_id(*l))
                             }
                             engine::Action::Player(p) => {
                                 println!("{:?}", p)
                             }
+                            engine::Action::Skip => {
+                                println!("Do nothing")
+                            }
+                            engine::Action::DiceRoll(dices) => match dices {
+                                engine::Dices::D4 => println!("Roll D4"),
+                                engine::Dices::D6 => println!("Roll D6"),
+                                engine::Dices::Both => println!("Roll both dice"),
+                            },
                         }
                     }
                     let input = read_line().await?;

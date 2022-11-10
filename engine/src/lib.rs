@@ -13,8 +13,10 @@ pub use dice::Roll;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayerId(usize);
 
+#[derive(Debug)]
 pub struct MessageChannel(mpsc::Sender<Message>);
 
+#[derive(Debug)]
 pub struct GameLogic {
     message_channel: MessageChannel,
     state: State,
@@ -36,8 +38,16 @@ pub enum Message {
 }
 
 #[derive(Debug)]
+pub enum Dices {
+    D4,
+    D6,
+    Both,
+}
+
+#[derive(Debug)]
 pub enum Action {
-    Basic(String),
+    Skip,
+    DiceRoll(Dices),
     Location(LocationId),
     Player(PlayerId),
 }
@@ -79,14 +89,13 @@ impl GameLogic {
             .iter()
             .filter(|p| attackable_locations.contains(&p.location().id()))
             .filter(|p| p.id() != self.state.current_player().id())
-            .map(|p| (Action::Player(p.id()), Some(p.id())))
-            .chain(std::iter::once((
-                Action::Basic("Skip attack".to_owned()),
-                None,
-            )));
+            .map(|p| (Action::Player(p.id()), Some(p.id())));
         if let Some(player_id) = self
             .message_channel
-            .request_action(self.state.current_player().id(), attackable_players)
+            .request_action(
+                self.state.current_player().id(),
+                attackable_players.chain(std::iter::once((Action::Skip, None))),
+            )
             .await?
         {
             self.message_channel
@@ -103,7 +112,7 @@ impl GameLogic {
             self.message_channel
                 .request_action(
                     self.state.current_player().id(),
-                    [(Action::Basic("Roll the dice".to_owned()), ())],
+                    [(Action::DiceRoll(Dices::Both), ())],
                 )
                 .await?;
 
@@ -138,7 +147,7 @@ impl GameLogic {
         self.message_channel
             .request_action(
                 self.state.current_player().id(),
-                [(Action::Basic("Roll the dice".to_owned()), ())],
+                [(Action::DiceRoll(Dices::Both), ())],
             )
             .await?;
         let current_player_location = self.state.current_player().location();

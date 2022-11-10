@@ -1,15 +1,14 @@
 use std::fmt::Debug;
 use std::ops::{Index, IndexMut};
-use std::sync::Arc;
 
-mod character;
-mod location;
+mod characters;
+mod locations;
 
 use crate::dice::Dice;
 use crate::PlayerId;
 
-use self::character::Character;
-pub use self::location::{Location, LocationId, Locations};
+use self::characters::{Character, CharacterId, Characters};
+pub use self::locations::{Location, LocationId, Locations};
 
 impl Index<PlayerId> for Vec<Player> {
     type Output = Player;
@@ -30,7 +29,7 @@ pub struct Player {
     id: PlayerId,
     damage: usize,
     location: LocationId,
-    character: Option<&'static dyn Character>,
+    character: Option<CharacterId>,
 }
 
 impl Player {
@@ -42,8 +41,12 @@ impl Player {
         Locations::from_id(self.location)
     }
 
+    pub fn character(&self) -> Option<&'static dyn Character> {
+        self.character.map(Characters::from_id)
+    }
+
     pub fn is_alive(&self) -> bool {
-        if let Some(character) = self.character {
+        if let Some(character) = self.character() {
             self.damage < character.hit_point()
         } else {
             true
@@ -55,12 +58,13 @@ impl Player {
 pub struct State {
     players: Vec<Player>,
     current_player: PlayerId,
-    locations: Arc<Locations>,
+    locations: Locations,
 }
 
 impl State {
     pub fn new(player_count: usize, dice: &mut Dice) -> State {
-        let locations = Arc::new(Locations::generate());
+        let locations = Locations::generate();
+        let mut characters = Characters::generate(player_count);
         State {
             players: (0..player_count)
                 .into_iter()
@@ -74,7 +78,7 @@ impl State {
                         }
                     })
                     .id(),
-                    character: None,
+                    character: characters.pop(),
                 })
                 .collect(),
             current_player: PlayerId(0),
