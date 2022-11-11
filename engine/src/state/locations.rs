@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LocationId(usize);
 
 #[derive(Debug)]

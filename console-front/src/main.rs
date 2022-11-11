@@ -1,84 +1,74 @@
-use anyhow::Result;
-use engine::{GameLogic, Locations, Message};
-use tokio::{io::AsyncBufReadExt, sync::mpsc};
+use std::io::BufRead;
 
-async fn read_line() -> Result<String> {
-    let mut stdin = tokio::io::BufReader::new(tokio::io::stdin());
-    let mut line = String::new();
-    stdin.read_line(&mut line).await?;
-    Ok(line.trim().to_owned())
-}
+use shared::FromPlayer;
+use tungstenite::connect;
+use url::Url;
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let (sender, mut receiver) = mpsc::channel(1);
-    let mut sh = GameLogic::new(5, sender);
+fn main() {
+    let (mut socket, response) = connect(Url::parse("ws://localhost:3001/api/join").unwrap())
+        .map_err(|e| dbg!(e))
+        .expect("Can't connect");
 
-    tokio::spawn(async move { sh.run().await });
-
-    while let Some(cmd) = receiver.recv().await {
-        match cmd {
-            Message::ActionRequest {
-                player,
-                choices,
-                response,
-            } => {
-                let choice = loop {
-                    println!("Action request for player {:?}:", player);
-                    for (i, c) in choices.iter().enumerate() {
-                        print!("  {}: ", i,);
-                        match c {
-                            engine::Action::Location(l) => {
-                                println!("{}", Locations::from_id(*l))
-                            }
-                            engine::Action::Player(p) => {
-                                println!("{:?}", p)
-                            }
-                            engine::Action::Skip => {
-                                println!("Do nothing")
-                            }
-                            engine::Action::DiceRoll(dices) => match dices {
-                                engine::Dices::D4 => println!("Roll D4"),
-                                engine::Dices::D6 => println!("Roll D6"),
-                                engine::Dices::Both => println!("Roll both dice"),
-                            },
-                        }
-                    }
-                    let input = read_line().await?;
-                    if let Ok(choice) = input.parse() {
-                        if choice < choices.len() {
-                            break choice;
-                        }
-                        println!("Invalid input");
-                    }
-                };
-                response.send(choice).unwrap();
-            }
-            Message::Info {
-                destination,
-                payload,
-            } => {
-                println!("Received info for players: {:?}", destination);
-                println!("  {:?}", payload);
-            }
-            Message::StateMutation(mutation) => match mutation {
-                engine::Mutation::Move(player_id, location_id) => {
-                    println!(
-                        "{:?} moved to {}",
-                        player_id,
-                        Locations::from_id(location_id)
-                    );
-                }
-                engine::Mutation::ChangeCurrentPlayer(player_id) => {
-                    println!();
-                    println!("Current player is now: {:?}", player_id);
-                }
-                engine::Mutation::DamagePlayer(player_id, damage) => {
-                    println!("{:?} took {} damage", player_id, damage);
-                }
-            },
-        }
+    println!("Connected to the server");
+    println!("Response HTTP code: {}", response.status());
+    println!("Response contains the following headers:");
+    for (ref header, _value) in response.headers() {
+        println!("* {}", header);
     }
 
-    Ok(())
+    let stdin = std::io::stdin();
+    let mut stdin = stdin.lock().lines();
+
+    loop {
+        let msg = socket.read_message().expect("Error reading message");
+        match msg {
+            tungstenite::Message::Text(msg) => {
+                let msg: shared::ToPlayer = serde_json::from_str(&msg).unwrap();
+                match msg {
+                    shared::ToPlayer::ActionRequest { choices } => {
+                        let choice = loop {
+                            println!("Action request for player");
+                            for (i, c) in choices.iter().enumerate() {
+                                print!("  {}: ", i,);
+                                match c {
+                                    shared::Action::Location(l) => {
+                                        println!("{}", shared::Locations::from_id(*l))
+                                    }
+                                    shared::Action::Player(p) => {
+                                        println!("{:?}", p)
+                                    }
+                                    shared::Action::Skip => {
+                                        println!("Do nothing")
+                                    }
+                                    shared::Action::DiceRoll(dices) => match dices {
+                                        shared::Dices::D4 => println!("Roll D4"),
+                                        shared::Dices::D6 => println!("Roll D6"),
+                                        shared::Dices::Both => println!("Roll both dice"),
+                                    },
+                                }
+                            }
+                            let input = stdin.next().unwrap().unwrap();
+                            if let Ok(choice) = input.parse() {
+                                if choice < choices.len() {
+                                    break choice;
+                                }
+                                println!("Invalid input");
+                            }
+                        };
+                        socket
+                            .write_message(tungstenite::Message::Text(
+                                serde_json::to_string(&FromPlayer::ActionChoice(choice)).unwrap(),
+                            ))
+                            .unwrap();
+                    }
+                    msg => println!("Received: {:?}", msg),
+                }
+            }
+            tungstenite::Message::Binary(_) => todo!(),
+            tungstenite::Message::Ping(_) => todo!(),
+            tungstenite::Message::Pong(_) => todo!(),
+            tungstenite::Message::Close(_) => todo!(),
+            tungstenite::Message::Frame(_) => unreachable!(),
+        }
+    }
 }

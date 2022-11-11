@@ -10,7 +10,7 @@ pub use crate::state::{Location, LocationId, Locations};
 use dice::Dice;
 pub use dice::Roll;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PlayerId(usize);
 
 impl PlayerId {
@@ -20,7 +20,7 @@ impl PlayerId {
 }
 
 #[derive(Debug)]
-pub struct MessageChannel(mpsc::Sender<Message>);
+pub struct MessageChannel(mpsc::Sender<Command>);
 
 #[derive(Debug)]
 pub struct GameLogic {
@@ -30,7 +30,7 @@ pub struct GameLogic {
 }
 
 #[derive(Debug)]
-pub enum Message {
+pub enum Command {
     ActionRequest {
         player: PlayerId,
         choices: Vec<Action>,
@@ -43,14 +43,14 @@ pub enum Message {
     StateMutation(Mutation),
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum Dices {
     D4,
     D6,
     Both,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum Action {
     Skip,
     DiceRoll(Dices),
@@ -58,14 +58,14 @@ pub enum Action {
     Player(PlayerId),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum InfoMessage {
     Basic(String),
     Roll { from: PlayerId, roll: Roll },
 }
 
 impl GameLogic {
-    pub fn new(player_count: usize, command_channel: mpsc::Sender<Message>) -> Self {
+    pub fn new(player_count: usize, command_channel: mpsc::Sender<Command>) -> Self {
         let mut dice = Dice::new();
         GameLogic {
             message_channel: MessageChannel(command_channel),
@@ -105,7 +105,7 @@ impl GameLogic {
             .await?
         {
             self.message_channel
-                .send(Message::Info {
+                .send(Command::Info {
                     destination: self.state.players().iter().map(|p| p.id()).collect(),
                     payload: InfoMessage::Basic(format!(
                         "{:?} is preparing an attack on {:?}",
@@ -124,7 +124,7 @@ impl GameLogic {
 
             let roll = self.dice.roll();
             self.message_channel
-                .send(Message::Info {
+                .send(Command::Info {
                     destination: self.state.players().iter().map(|p| p.id()).collect(),
                     payload: InfoMessage::Roll {
                         from: self.state.current_player().id(),
@@ -137,7 +137,7 @@ impl GameLogic {
                 .await?;
         } else {
             self.message_channel
-                .send(Message::Info {
+                .send(Command::Info {
                     destination: self.state.players().iter().map(|p| p.id()).collect(),
                     payload: InfoMessage::Basic(format!(
                         "{:?} did not attack",
@@ -164,7 +164,7 @@ impl GameLogic {
             }
         };
         self.message_channel
-            .send(Message::Info {
+            .send(Command::Info {
                 destination: self.state.players().iter().map(|p| p.id()).collect(),
                 payload: InfoMessage::Roll {
                     from: self.state.current_player().id(),
@@ -212,7 +212,7 @@ impl GameLogic {
     async fn mutate_state(&mut self, mutation: Mutation) -> Result<()> {
         self.state.mutate(mutation);
         self.message_channel
-            .send(Message::StateMutation(mutation))
+            .send(Command::StateMutation(mutation))
             .await?;
         // TODO: check victory condition
         Ok(())
@@ -231,7 +231,7 @@ impl MessageChannel {
         let (snd, rcv) = oneshot::channel();
         let (choices, res): (_, Vec<_>) = choices.into_iter().unzip();
         self.0
-            .send(Message::ActionRequest {
+            .send(Command::ActionRequest {
                 player: from_player,
                 choices,
                 response: snd,
@@ -241,7 +241,7 @@ impl MessageChannel {
         Ok(res[r])
     }
 
-    async fn send(&mut self, message: Message) -> Result<()> {
+    async fn send(&mut self, message: Command) -> Result<()> {
         self.0.send(message).await?;
         Ok(())
     }

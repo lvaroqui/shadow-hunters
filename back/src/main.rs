@@ -10,6 +10,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use axum::{
     extract::ws::{self, WebSocket, WebSocketUpgrade},
     http::StatusCode,
+    response::Response,
     routing::get,
     Router,
 };
@@ -70,7 +71,7 @@ async fn main() {
             }),
         )
         .route(
-            "/run",
+            "/start",
             get({
                 let room = Arc::clone(&room);
                 move || Room::start(room)
@@ -102,10 +103,10 @@ impl Room {
         StatusCode::OK
     }
 
-    async fn run(room: Arc<Mutex<Self>>, mut rx: mpsc::Receiver<engine::Message>) {
+    async fn run(room: Arc<Mutex<Self>>, mut rx: mpsc::Receiver<engine::Command>) {
         while let Some(message) = rx.recv().await {
             match message {
-                engine::Message::ActionRequest {
+                engine::Command::ActionRequest {
                     player,
                     choices,
                     response,
@@ -119,7 +120,7 @@ impl Room {
                     assert!(p.request_answer.is_none());
                     p.request_answer = Some(response)
                 }
-                engine::Message::Info {
+                engine::Command::Info {
                     destination,
                     payload,
                 } => {
@@ -136,7 +137,7 @@ impl Room {
                         .unwrap();
                     }
                 }
-                engine::Message::StateMutation(mutation) => {
+                engine::Command::StateMutation(mutation) => {
                     let mut room = room.lock().await;
                     for p in &mut room.players {
                         p.tx.send(PlayerMessage::StateMutation(mutation))
@@ -148,7 +149,7 @@ impl Room {
         }
     }
 
-    async fn register_player(room: Arc<Mutex<Room>>, ws: WebSocketUpgrade) -> StatusCode {
+    async fn register_player(room: Arc<Mutex<Room>>, ws: WebSocketUpgrade) -> Response {
         let (tx, rx) = mpsc::channel(10);
         let id = {
             let mut room = room.lock().await;
@@ -156,9 +157,7 @@ impl Room {
             room.players.push(Player::new(id, tx));
             id
         };
-        ws.on_upgrade(move |socket| Self::handle_player(room, id, socket, rx));
-
-        StatusCode::OK
+        ws.on_upgrade(move |socket| Self::handle_player(room, id, socket, rx))
     }
 
     async fn handle_player(
@@ -172,23 +171,44 @@ impl Room {
             let room = Arc::clone(&room);
             tokio::spawn(async move { Self::handle_player_ws(room, id, socket_rx).await });
         }
-        tokio::spawn(
-            async move { Self::handle_player_commands(room, id, receiver, socket_tx).await },
-        );
+        Self::handle_player_commands(receiver, socket_tx).await;
     }
 
     async fn handle_player_commands(
-        room: Arc<Mutex<Self>>,
-        id: PlayerId,
         mut receiver: mpsc::Receiver<PlayerMessage>,
         mut socket: SplitSink<WebSocket, ws::Message>,
     ) {
         while let Some(msg) = receiver.recv().await {
             match msg {
-                PlayerMessage::ActionRequest { choices } => todo!(),
-                PlayerMessage::Info { payload } => todo!(),
-                PlayerMessage::StateMutation(_) => todo!(),
-                PlayerMessage::Pong(data) => socket.send(ws::Message::Pong(data)).await.unwrap(),
+                PlayerMessage::ActionRequest { choices } => {
+                    socket
+                        .send(ws::Message::Text(
+                            serde_json::to_string(&shared::ToPlayer::ActionRequest { choices })
+                                .unwrap(),
+                        ))
+                        .await
+                        .unwrap();
+                }
+                PlayerMessage::Info { payload } => {
+                    socket
+                        .send(ws::Message::Text(
+                            serde_json::to_string(&shared::ToPlayer::Info { payload }).unwrap(),
+                        ))
+                        .await
+                        .unwrap();
+                }
+                PlayerMessage::StateMutation(mutation) => {
+                    socket
+                        .send(ws::Message::Text(
+                            serde_json::to_string(&shared::ToPlayer::StateMutation(mutation))
+                                .unwrap(),
+                        ))
+                        .await
+                        .unwrap();
+                }
+                PlayerMessage::Pong(data) => {
+                    socket.send(ws::Message::Pong(data)).await.unwrap();
+                }
             }
         }
     }
@@ -202,9 +222,16 @@ impl Room {
             match msg {
                 Ok(msg) => match msg {
                     ws::Message::Text(text) => {
-                        let mut room = room.lock().await;
-                        if let Some(tx) = room.get_player_mut(id).request_answer.take() {
-                            tx.send(text.parse().unwrap()).unwrap()
+                        let msg: shared::FromPlayer = serde_json::from_str(&text).unwrap();
+                        match msg {
+                            shared::FromPlayer::ActionChoice(choice) => {
+                                let mut room = room.lock().await;
+                                if let Some(tx) = room.get_player_mut(id).request_answer.take() {
+                                    tx.send(choice).unwrap();
+                                } else {
+                                    println!("Did not expect a choice from {:?}", id);
+                                }
+                            }
                         }
                     }
                     ws::Message::Close(_) => {

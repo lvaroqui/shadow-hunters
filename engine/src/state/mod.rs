@@ -109,7 +109,7 @@ impl State {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum Mutation {
     Move(PlayerId, LocationId),
     ChangeCurrentPlayer(PlayerId),
