@@ -13,6 +13,12 @@ pub use dice::Roll;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlayerId(usize);
 
+impl PlayerId {
+    pub fn new(id: usize) -> Self {
+        Self(id)
+    }
+}
+
 #[derive(Debug)]
 pub struct MessageChannel(mpsc::Sender<Message>);
 
@@ -52,7 +58,7 @@ pub enum Action {
     Player(PlayerId),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InfoMessage {
     Basic(String),
     Roll { from: PlayerId, roll: Roll },
