@@ -1,21 +1,33 @@
 use std::fmt::Display;
 
+mod cemetry;
+mod church;
+mod erstwhile_altar;
+mod hermits_cabin;
+mod underworld_gate;
+mod weird_woods;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LocationId(usize);
+
+pub trait Location: core::fmt::Debug + Send + Sync + Display {
+    fn id(&self) -> LocationId;
+    fn dice_numbers(&self) -> &'static [usize];
+}
+
+static LOCATIONS: [&'static dyn Location; 6] = [
+    &hermits_cabin::HermitsCabin { id: LocationId(0) },
+    &underworld_gate::UnderworldGate { id: LocationId(1) },
+    &church::Church { id: LocationId(2) },
+    &cemetry::Cemetry { id: LocationId(3) },
+    &weird_woods::WeirdWoods { id: LocationId(4) },
+    &erstwhile_altar::ErstwhileAltar { id: LocationId(5) },
+];
 
 #[derive(Debug)]
 pub struct Locations {
     locations: [LocationId; 6],
 }
-
-static LOCATIONS: [&'static dyn Location; 6] = [
-    &HermitsCabin { id: LocationId(0) },
-    &UnderworldGate { id: LocationId(1) },
-    &Church { id: LocationId(2) },
-    &Cemetry { id: LocationId(3) },
-    &WeirdWoods { id: LocationId(4) },
-    &ErstwhileAltar { id: LocationId(5) },
-];
 
 impl Locations {
     #[cfg(test)]
@@ -86,125 +98,6 @@ impl Locations {
 
     fn group_iter(&self) -> impl Iterator<Item = &[LocationId]> + Clone + '_ {
         self.locations.chunks(2)
-    }
-}
-
-pub trait Location: core::fmt::Debug + Send + Sync + Display {
-    fn id(&self) -> LocationId;
-    fn dice_numbers(&self) -> &'static [usize];
-}
-
-#[derive(Debug)]
-struct HermitsCabin {
-    id: LocationId,
-}
-impl Location for HermitsCabin {
-    fn id(&self) -> LocationId {
-        self.id
-    }
-
-    fn dice_numbers(&self) -> &'static [usize] {
-        &[2, 3]
-    }
-}
-impl Display for HermitsCabin {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Hermits Cabin")
-    }
-}
-
-#[derive(Debug)]
-struct UnderworldGate {
-    id: LocationId,
-}
-impl Location for UnderworldGate {
-    fn id(&self) -> LocationId {
-        self.id
-    }
-
-    fn dice_numbers(&self) -> &'static [usize] {
-        &[4, 5]
-    }
-}
-impl Display for UnderworldGate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Underworld Gate")
-    }
-}
-
-#[derive(Debug)]
-struct Church {
-    id: LocationId,
-}
-impl Location for Church {
-    fn id(&self) -> LocationId {
-        self.id
-    }
-
-    fn dice_numbers(&self) -> &'static [usize] {
-        &[6]
-    }
-}
-impl Display for Church {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Church")
-    }
-}
-
-#[derive(Debug)]
-struct Cemetry {
-    id: LocationId,
-}
-impl Location for Cemetry {
-    fn id(&self) -> LocationId {
-        self.id
-    }
-
-    fn dice_numbers(&self) -> &'static [usize] {
-        &[8]
-    }
-}
-impl Display for Cemetry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Cemetry")
-    }
-}
-
-#[derive(Debug)]
-struct WeirdWoods {
-    id: LocationId,
-}
-impl Location for WeirdWoods {
-    fn id(&self) -> LocationId {
-        self.id
-    }
-
-    fn dice_numbers(&self) -> &'static [usize] {
-        &[9]
-    }
-}
-impl Display for WeirdWoods {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Weird Woods")
-    }
-}
-
-#[derive(Debug)]
-struct ErstwhileAltar {
-    id: LocationId,
-}
-impl Location for ErstwhileAltar {
-    fn id(&self) -> LocationId {
-        self.id
-    }
-
-    fn dice_numbers(&self) -> &'static [usize] {
-        &[10]
-    }
-}
-impl Display for ErstwhileAltar {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Ertswhile Altar")
     }
 }
 
