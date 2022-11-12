@@ -23,9 +23,9 @@ pub enum Command {
 
 #[derive(Debug)]
 pub struct GameLogic {
-    message_channel: MessageChannel,
-    state: State,
-    dice: Dice,
+    pub(crate) message_channel: MessageChannel,
+    pub(crate) state: State,
+    pub(crate) dice: Dice,
 }
 
 impl GameLogic {
@@ -58,63 +58,51 @@ impl GameLogic {
             .iter()
             .filter(|p| attackable_locations.contains(&p.location().id()))
             .filter(|p| p.id() != self.state.current_player().id())
-            .map(|p| (Action::Player(p.id()), Some(p.id())));
+            .map(|p| (Action::DamagePlayer(p.id(), None), Some(p.id())));
         if let Some(player_id) = self
             .message_channel
-            .request_action(
+            .request_action_map(
                 self.state.current_player().id(),
                 attackable_players.chain(std::iter::once((Action::Skip, None))),
             )
             .await?
         {
-            self.message_channel
-                .send(Command::Info {
-                    destination: self.state.players().iter().map(|p| p.id()).collect(),
-                    payload: InfoMessage::Basic(format!(
-                        "{:?} is preparing an attack on {:?}",
-                        self.state.current_player().id(),
-                        player_id
-                    )),
-                })
-                .await?;
+            self.broadcast_info(InfoMessage::Basic(format!(
+                "{:?} is preparing an attack on {:?}",
+                self.state.current_player().id(),
+                player_id
+            )))
+            .await?;
 
             self.message_channel
-                .request_action(
+                .request_action_map(
                     self.state.current_player().id(),
                     [(Action::DiceRoll(Dices::Both), ())],
                 )
                 .await?;
 
             let roll = self.dice.roll();
-            self.message_channel
-                .send(Command::Info {
-                    destination: self.state.players().iter().map(|p| p.id()).collect(),
-                    payload: InfoMessage::Roll {
-                        from: self.state.current_player().id(),
-                        roll,
-                    },
-                })
-                .await?;
+            self.broadcast_info(InfoMessage::Roll {
+                from: self.state.current_player().id(),
+                roll,
+            })
+            .await?;
             let damage = roll.diff();
             self.mutate_state(Mutation::DamagePlayer(player_id, damage))
                 .await?;
         } else {
-            self.message_channel
-                .send(Command::Info {
-                    destination: self.state.players().iter().map(|p| p.id()).collect(),
-                    payload: InfoMessage::Basic(format!(
-                        "{:?} did not attack",
-                        self.state.current_player()
-                    )),
-                })
-                .await?;
+            self.broadcast_info(InfoMessage::Basic(format!(
+                "{:?} did not attack",
+                self.state.current_player()
+            )))
+            .await?;
         }
         Ok(())
     }
 
     async fn movement(&mut self) -> Result<(), anyhow::Error> {
         self.message_channel
-            .request_action(
+            .request_action_map(
                 self.state.current_player().id(),
                 [(Action::DiceRoll(Dices::Both), ())],
             )
@@ -143,7 +131,7 @@ impl GameLogic {
                 .filter(|l| l.id() != current_player_location.id())
                 .map(|l| (Action::Location(l.id()), l));
             self.message_channel
-                .request_action(self.state.current_player().id(), choices)
+                .request_action_map(self.state.current_player().id(), choices)
                 .await?
         } else {
             Locations::from_dice_number(roll.sum())
@@ -153,6 +141,10 @@ impl GameLogic {
             location.id(),
         ))
         .await?;
+
+        location
+            .handle(self, self.state.current_player().id())
+            .await;
         Ok(())
     }
 
@@ -172,7 +164,7 @@ impl GameLogic {
         Ok(())
     }
 
-    async fn mutate_state(&mut self, mutation: Mutation) -> Result<()> {
+    pub(crate) async fn mutate_state(&mut self, mutation: Mutation) -> Result<()> {
         self.state.mutate(mutation);
         self.message_channel
             .send(Command::StateMutation(mutation))
@@ -180,13 +172,23 @@ impl GameLogic {
         // TODO: check victory condition
         Ok(())
     }
+
+    pub(crate) async fn broadcast_info(&mut self, message: InfoMessage) -> Result<()> {
+        self.message_channel
+            .send(Command::Info {
+                destination: self.state.players().iter().map(|p| p.id()).collect(),
+                payload: message,
+            })
+            .await?;
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
-struct MessageChannel(mpsc::Sender<Command>);
+pub(crate) struct MessageChannel(mpsc::Sender<Command>);
 
 impl MessageChannel {
-    async fn request_action<T>(
+    pub(crate) async fn request_action_map<T>(
         &mut self,
         from_player: PlayerId,
         choices: impl IntoIterator<Item = (Action, T)>,
@@ -207,7 +209,7 @@ impl MessageChannel {
         Ok(res[r])
     }
 
-    async fn send(&mut self, message: Command) -> Result<()> {
+    pub(crate) async fn send(&mut self, message: Command) -> Result<()> {
         self.0.send(message).await?;
         Ok(())
     }

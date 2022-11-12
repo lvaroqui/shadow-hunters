@@ -3,10 +3,18 @@ use std::ops::{Index, IndexMut};
 
 mod characters;
 mod locations;
-use crate::PlayerId;
 
 use self::characters::{Character, CharacterId, Characters};
 pub use self::locations::{Location, LocationId, Locations};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PlayerId(usize);
+
+impl PlayerId {
+    pub fn new(id: usize) -> Self {
+        Self(id)
+    }
+}
 
 impl Index<PlayerId> for Vec<Player> {
     type Output = Player;
@@ -22,11 +30,12 @@ impl IndexMut<PlayerId> for Vec<Player> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Player {
     id: PlayerId,
     damage: usize,
     location: LocationId,
+    revealed: bool,
     character: Option<CharacterId>,
 }
 
@@ -52,7 +61,7 @@ impl Player {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct State {
     players: Vec<Player>,
     current_player: PlayerId,
@@ -79,12 +88,24 @@ impl State {
                         }
                     })
                     .id(),
-                    character: characters.pop(),
+                    revealed: false,
+                    character: Some(characters.pop().unwrap()),
                 })
                 .collect(),
             current_player: PlayerId(0),
             locations,
         }
+    }
+
+    #[cfg(feature = "game-logic")]
+    pub fn prepare_for_player(&self, player_id: PlayerId) -> Self {
+        let mut res = self.clone();
+        for p in &mut res.players {
+            if p.id() != player_id && !p.revealed {
+                p.character = None;
+            }
+        }
+        res
     }
 
     pub fn current_player(&self) -> &Player {
@@ -106,6 +127,17 @@ impl State {
             }
             Mutation::ChangeCurrentPlayer(player_id) => self.current_player = player_id,
             Mutation::DamagePlayer(player_id, damage) => self.players[player_id].damage += damage,
+            Mutation::HealPlayer(player_id, hp) => {
+                self.players[player_id].damage = self.players[player_id].damage.saturating_sub(hp)
+            }
+            Mutation::RevealPlayer(player_id, character_id) => {
+                let player = &mut self.players[player_id];
+                player.revealed = true;
+                if let Some(c) = player.character {
+                    assert_eq!(c, character_id);
+                }
+                player.character = Some(character_id);
+            }
         }
     }
 }
@@ -115,4 +147,6 @@ pub enum Mutation {
     Move(PlayerId, LocationId),
     ChangeCurrentPlayer(PlayerId),
     DamagePlayer(PlayerId, usize),
+    HealPlayer(PlayerId, usize),
+    RevealPlayer(PlayerId, CharacterId),
 }

@@ -76,6 +76,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "back"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "engine",
+ "futures",
+ "serde",
+ "serde_json",
+ "shared",
+ "tokio",
+]
+
+[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -160,6 +174,7 @@ name = "engine"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "lazy_static",
  "rand",
  "serde",
@@ -644,20 +659,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
-]
-
-[[package]]
-name = "shadow-hunters"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "axum",
- "engine",
- "futures",
- "serde",
- "serde_json",
- "shared",
- "tokio",
 ]
 
 [[package]]

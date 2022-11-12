@@ -2,19 +2,10 @@
 mod game_logic;
 pub mod state;
 
-pub use crate::state::{Location, LocationId, Locations};
+pub use state::{Location, LocationId, Locations, PlayerId};
 
 #[cfg(feature = "game-logic")]
 pub use game_logic::{Command, GameLogic};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct PlayerId(usize);
-
-impl PlayerId {
-    pub fn new(id: usize) -> Self {
-        Self(id)
-    }
-}
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum Dices {
@@ -28,7 +19,8 @@ pub enum Action {
     Skip,
     DiceRoll(Dices),
     Location(LocationId),
-    Player(PlayerId),
+    DamagePlayer(PlayerId, Option<usize>),
+    HealPlayer(PlayerId, Option<usize>),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

@@ -9,6 +9,7 @@ edition = "2021"
 lazy_static = "1.4"
 serde = { version = "1", features = ["derive"] }
 anyhow = "1.0"
+async-trait = "0.1"
 rand = { version = "0.8", optional = true }
 tokio = { version = "1", features = ['full'], optional = true }
 

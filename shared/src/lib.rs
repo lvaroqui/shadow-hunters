@@ -1,4 +1,7 @@
-pub use engine::{state::Mutation, Action, Dices, InfoMessage, Locations};
+pub use engine::{
+    state::{self, Mutation, State},
+    Action, Dices, InfoMessage,
+};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ToPlayer {

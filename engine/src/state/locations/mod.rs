@@ -1,5 +1,9 @@
 use std::fmt::Display;
 
+use super::PlayerId;
+#[cfg(feature = "game-logic")]
+use crate::game_logic::GameLogic;
+
 mod cemetry;
 mod church;
 mod erstwhile_altar;
@@ -10,9 +14,13 @@ mod weird_woods;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LocationId(usize);
 
+#[async_trait::async_trait]
 pub trait Location: core::fmt::Debug + Send + Sync + Display {
     fn id(&self) -> LocationId;
     fn dice_numbers(&self) -> &'static [usize];
+
+    #[cfg(feature = "game-logic")]
+    async fn handle(&self, _game_logic: &mut GameLogic, _player_id: PlayerId) {}
 }
 
 static LOCATIONS: [&'static dyn Location; 6] = [
@@ -24,7 +32,7 @@ static LOCATIONS: [&'static dyn Location; 6] = [
     &erstwhile_altar::ErstwhileAltar { id: LocationId(5) },
 ];
 
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Locations {
     locations: [LocationId; 6],
 }

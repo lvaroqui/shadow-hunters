@@ -25,10 +25,13 @@ fn main() {
                                 print!("  {}: ", i,);
                                 match c {
                                     shared::Action::Location(l) => {
-                                        println!("{}", shared::Locations::from_id(*l))
+                                        println!("{}", shared::state::Locations::from_id(*l))
                                     }
-                                    shared::Action::Player(p) => {
-                                        println!("{:?}", p)
+                                    shared::Action::DamagePlayer(p, damage) => {
+                                        println!("Damage {:?} for {:?}", p, damage)
+                                    }
+                                    shared::Action::HealPlayer(p, hp) => {
+                                        println!("Heal player {:?} for {:?}", p, hp)
                                     }
                                     shared::Action::Skip => {
                                         println!("Do nothing")

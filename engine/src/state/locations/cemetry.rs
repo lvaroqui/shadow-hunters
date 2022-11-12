@@ -1,8 +1,6 @@
 use std::fmt::Display;
 
-use super::Location;
-
-use super::LocationId;
+use super::{Location, LocationId};
 
 #[derive(Debug)]
 pub(crate) struct Cemetry {
