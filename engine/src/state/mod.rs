@@ -3,8 +3,6 @@ use std::ops::{Index, IndexMut};
 
 mod characters;
 mod locations;
-
-use crate::dice::Dice;
 use crate::PlayerId;
 
 use self::characters::{Character, CharacterId, Characters};
@@ -62,7 +60,10 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(player_count: usize, dice: &mut Dice) -> State {
+    #[cfg(feature = "game-logic")]
+    pub fn new(player_count: usize) -> State {
+        use crate::game_logic::Dice;
+        let mut dice = Dice::new();
         let locations = Locations::generate();
         let mut characters = Characters::generate(player_count);
         State {

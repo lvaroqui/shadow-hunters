@@ -10,7 +10,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use axum::{
     extract::ws::{self, WebSocket, WebSocketUpgrade},
     http::StatusCode,
-    response::Response,
+    response::{IntoResponse, Response},
     routing::get,
     Router,
 };
@@ -54,7 +54,7 @@ impl Room {
 enum PlayerMessage {
     ActionRequest { choices: Vec<engine::Action> },
     Info { payload: engine::InfoMessage },
-    StateMutation(engine::Mutation),
+    StateMutation(engine::state::Mutation),
     Pong(Vec<u8>),
 }
 
@@ -153,6 +153,9 @@ impl Room {
         let (tx, rx) = mpsc::channel(10);
         let id = {
             let mut room = room.lock().await;
+            if let RoomState::Running = room.state {
+                return StatusCode::NOT_FOUND.into_response();
+            }
             let id = PlayerId::new(room.players.len());
             room.players.push(Player::new(id, tx));
             id

@@ -5,16 +5,9 @@ use tungstenite::connect;
 use url::Url;
 
 fn main() {
-    let (mut socket, response) = connect(Url::parse("ws://localhost:3001/api/join").unwrap())
+    let (mut socket, _response) = connect(Url::parse("ws://localhost:3001/api/join").unwrap())
         .map_err(|e| dbg!(e))
         .expect("Can't connect");
-
-    println!("Connected to the server");
-    println!("Response HTTP code: {}", response.status());
-    println!("Response contains the following headers:");
-    for (ref header, _value) in response.headers() {
-        println!("* {}", header);
-    }
 
     let stdin = std::io::stdin();
     let mut stdin = stdin.lock().lines();

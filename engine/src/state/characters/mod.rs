@@ -1,5 +1,3 @@
-use rand::seq::IteratorRandom;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CharacterId(usize);
 
@@ -27,7 +25,9 @@ impl Characters {
         CHARACTERS[id.0]
     }
 
+    #[cfg(feature = "game-logic")]
     pub fn generate(player_count: usize) -> Vec<CharacterId> {
+        use rand::seq::IteratorRandom;
         assert!(player_count <= CHARACTERS.len());
         (0..CHARACTERS.len())
             .into_iter()

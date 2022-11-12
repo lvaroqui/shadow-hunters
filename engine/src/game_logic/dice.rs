@@ -1,14 +1,9 @@
+use crate::Roll;
 use rand::prelude::*;
 
 #[derive(Debug)]
 pub struct Dice {
     rng: StdRng,
-}
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub struct Roll {
-    pub d4: u8,
-    pub d6: u8,
 }
 
 impl Dice {

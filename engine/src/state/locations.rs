@@ -1,13 +1,11 @@
 use std::fmt::Display;
 
-use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LocationId(usize);
 
 #[derive(Debug)]
 pub struct Locations {
-    locations: [&'static dyn Location; 6],
+    locations: [LocationId; 6],
 }
 
 static LOCATIONS: [&'static dyn Location; 6] = [
@@ -23,12 +21,14 @@ impl Locations {
     #[cfg(test)]
     pub fn unshuffled() -> Self {
         Self {
-            locations: LOCATIONS,
+            locations: LOCATIONS.map(|l| l.id()),
         }
     }
 
+    #[cfg(feature = "game-logic")]
     pub fn generate() -> Self {
-        let mut locations = LOCATIONS;
+        use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
+        let mut locations = LOCATIONS.map(|l| l.id());
         locations.shuffle(&mut StdRng::from_entropy());
         Self { locations }
     }
@@ -47,7 +47,7 @@ impl Locations {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &'static dyn Location> + Clone + '_ {
-        self.locations.iter().copied()
+        self.locations.iter().copied().map(|id| LOCATIONS[id.0])
     }
 
     pub fn in_group_iter(
@@ -55,9 +55,9 @@ impl Locations {
         id: LocationId,
     ) -> impl Iterator<Item = &'static dyn Location> + Clone + '_ {
         self.group_iter()
-            .filter(move |g| g.iter().any(|l| l.id() == id))
+            .filter(move |g| g.iter().any(|&i| i == id))
             .flatten()
-            .copied()
+            .map(|i| LOCATIONS[i.0])
     }
 
     pub fn out_group_iter(
@@ -65,25 +65,26 @@ impl Locations {
         id: LocationId,
     ) -> impl Iterator<Item = &'static dyn Location> + Clone + '_ {
         self.group_iter()
-            .filter(move |g| !g.iter().any(|l| l.id() == id))
+            .filter(move |g| !g.iter().any(|&i| i == id))
             .flatten()
-            .copied()
+            .map(|i| LOCATIONS[i.0])
     }
 
     pub fn adjacent(&self, id: LocationId) -> [&'static dyn Location; 2] {
         let pos = self
             .locations
             .iter()
-            .position(|l| l.id() == id)
+            .position(|&i| i == id)
             .expect("Invalid id") as isize;
         let len = self.locations.len() as isize;
         [
             self.locations[((pos - 1).rem_euclid(len)) as usize],
             self.locations[((pos + 1).rem_euclid(len)) as usize],
         ]
+        .map(|i| LOCATIONS[i.0])
     }
 
-    fn group_iter(&self) -> impl Iterator<Item = &[&'static dyn Location]> + Clone + '_ {
+    fn group_iter(&self) -> impl Iterator<Item = &[LocationId]> + Clone + '_ {
         self.locations.chunks(2)
     }
 }
