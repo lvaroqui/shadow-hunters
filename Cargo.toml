@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "back",
+    "console-front",
+    "engine",
+    "shared",
+]
