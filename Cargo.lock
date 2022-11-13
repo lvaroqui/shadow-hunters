@@ -85,7 +85,6 @@ dependencies = [
  "futures",
  "serde",
  "serde_json",
- "shared",
  "tokio",
 ]
 
@@ -178,6 +177,7 @@ dependencies = [
  "lazy_static",
  "rand",
  "serde",
+ "shared",
  "tokio",
 ]
 
@@ -665,7 +665,6 @@ dependencies = [
 name = "shared"
 version = "0.1.0"
 dependencies = [
- "engine",
  "serde",
 ]
 

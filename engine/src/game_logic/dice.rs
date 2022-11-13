@@ -1,5 +1,5 @@
-use crate::Roll;
 use rand::prelude::*;
+use shared::Roll;
 
 #[derive(Debug)]
 pub struct Dice {
@@ -26,15 +26,5 @@ impl Dice {
             d4: self.roll_d4(),
             d6: self.roll_d6(),
         }
-    }
-}
-
-impl Roll {
-    pub fn sum(&self) -> usize {
-        (self.d4 + self.d6).into()
-    }
-
-    pub fn diff(&self) -> usize {
-        self.d4.abs_diff(self.d6).into()
     }
 }
